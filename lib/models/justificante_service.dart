@@ -12,6 +12,7 @@ class JustificanteModel {
   final DateTime fechaInicio;
   final DateTime fechaFin;
   final String motivo;
+  final bool esMotivoSalud;
   final String ineAnversoUrl;
   final String ineReversoUrl;
   final String cartaMotivoUrl;
@@ -30,6 +31,7 @@ class JustificanteModel {
     required this.fechaInicio,
     required this.fechaFin,
     required this.motivo,
+    this.esMotivoSalud = false,
     required this.ineAnversoUrl,
     required this.ineReversoUrl,
     required this.cartaMotivoUrl,
@@ -49,6 +51,7 @@ class JustificanteModel {
       'fechaInicio': Timestamp.fromDate(fechaInicio),
       'fechaFin': Timestamp.fromDate(fechaFin),
       'motivo': motivo,
+      'esMotivoSalud': esMotivoSalud,
       'ineAnversoUrl': ineAnversoUrl,
       'ineReversoUrl': ineReversoUrl,
       'cartaMotivoUrl': cartaMotivoUrl,
@@ -73,6 +76,7 @@ class JustificanteModel {
       fechaInicio: (data['fechaInicio'] as Timestamp).toDate(),
       fechaFin: (data['fechaFin'] as Timestamp).toDate(),
       motivo: data['motivo'] ?? '',
+      esMotivoSalud: data['esMotivoSalud'] ?? false,
       ineAnversoUrl: data['ineAnversoUrl'] ?? '',
       ineReversoUrl: data['ineReversoUrl'] ?? '',
       cartaMotivoUrl: data['cartaMotivoUrl'] ?? '',
@@ -94,7 +98,6 @@ class JustificanteService {
     'justificantes',
   );
 
-  // 1. Estudiante crea o reenvia solicitud corregida
   Future<void> enviarOSubsanarSolicitud(JustificanteModel item) async {
     if (item.id.isEmpty) {
       await _ref.add(item.toMap());
@@ -107,7 +110,6 @@ class JustificanteService {
     }
   }
 
-  // 2. Admin rechaza solicitud con motivo obligatorio
   Future<void> rechazarSolicitud(String id, String motivoRechazo) async {
     if (motivoRechazo.trim().isEmpty) {
       throw Exception('El motivo de rechazo es obligatorio.');
@@ -118,7 +120,6 @@ class JustificanteService {
     });
   }
 
-  // 3. Admin aprueba solicitud y registra fecha de emision
   Future<DateTime> aprobarSolicitud(String id) async {
     final ahora = DateTime.now();
     await _ref.doc(id).update({
@@ -129,20 +130,9 @@ class JustificanteService {
     return ahora;
   }
 
-  // 4. Admin notifica que el documento fisico ya esta firmado y listo para recoger
   Future<void> marcarListoParaRecoger(String id, String studentId) async {
     await _ref.doc(id).update({
       'estado': JustificanteStatus.READY_FOR_PICKUP.name,
-    });
-
-    // Inserta un evento en la coleccion 'notifications' para que Cloud Functions
-    // envie el Push Notification via FCM al token del estudiante.
-    await FirebaseFirestore.instance.collection('notifications').add({
-      'targetUserId': studentId,
-      'title': 'Justificante listo para recoger',
-      'body':
-          'Tu justificante ya fue impreso y firmado. Pasa al Departamento de Tutorias por el.',
-      'createdAt': FieldValue.serverTimestamp(),
     });
   }
 }

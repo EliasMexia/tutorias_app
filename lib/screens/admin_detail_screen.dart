@@ -1,4 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:tutorias_app/models/justificante_service.dart';
 import 'package:tutorias_app/services/pdf_generator.dart';
 
@@ -13,21 +18,42 @@ class AdminDetailScreen extends StatefulWidget {
 
 class _AdminDetailScreenState extends State<AdminDetailScreen> {
   final JustificanteService _service = JustificanteService();
+  final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
   late JustificanteModel _item;
   bool _procesando = false;
+  Future<Uint8List>? _pdfBytesFuture;
 
   @override
   void initState() {
     super.initState();
     _item = widget.solicitud;
+    if (_esArchivoPdf(_item.cartaMotivoUrl)) {
+      _pdfBytesFuture = _descargarBytes(_item.cartaMotivoUrl);
+    }
   }
 
-  void _abrirVisorPantallaCompleta(String titulo, String imageUrl) {
+  bool _esArchivoPdf(String url) {
+    final limpia = url.toLowerCase().split('?').first;
+    return limpia.endsWith('.pdf');
+  }
+
+  Future<Uint8List> _descargarBytes(String url) async {
+    final respuesta = await http.get(Uri.parse(url));
+    if (respuesta.statusCode == 200) {
+      return respuesta.bodyBytes;
+    }
+    throw Exception('Error al descargar documento (${respuesta.statusCode})');
+  }
+
+  void _abrirVisorPantallaCompleta(String titulo, String url) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            FullScreenDocumentViewer(title: titulo, imageUrl: imageUrl),
+        builder: (_) => FullScreenDocumentViewer(
+          title: titulo,
+          documentUrl: url,
+          esPdf: _esArchivoPdf(url),
+        ),
       ),
     );
   }
@@ -90,6 +116,7 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
           fechaInicio: _item.fechaInicio,
           fechaFin: _item.fechaFin,
           motivo: _item.motivo,
+          esMotivoSalud: _item.esMotivoSalud,
           ineAnversoUrl: _item.ineAnversoUrl,
           ineReversoUrl: _item.ineReversoUrl,
           cartaMotivoUrl: _item.cartaMotivoUrl,
@@ -121,7 +148,9 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
     }
   }
 
-  Widget _construirTarjetaDocumento(String titulo, String url) {
+  Widget _construirVisorExpedienteUnico(String titulo, String url) {
+    final esPdf = _esArchivoPdf(url);
+
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: const EdgeInsets.only(bottom: 16),
@@ -134,39 +163,68 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  titulo,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    titulo,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: () => _abrirVisorPantallaCompleta(titulo, url),
-                  icon: const Icon(Icons.zoom_out_map, size: 18),
-                  label: const Text('Expandir con Zoom'),
+                  icon: const Icon(Icons.open_in_full, size: 18),
+                  label: const Text('Pantalla completa'),
                 ),
               ],
             ),
           ),
           SizedBox(
-            height: 220,
-            child: InteractiveViewer(
-              minScale: 1.0,
-              maxScale: 4.0,
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return const Center(child: CircularProgressIndicator());
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Text(
-                      'No se pudo cargar la vista previa de la imagen',
+            height: 420,
+            child: esPdf
+                ? FutureBuilder<Uint8List>(
+                    future: _pdfBytesFuture ?? _descargarBytes(url),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError || !snapshot.hasData) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'No se pudo cargar el PDF escaneado: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return PdfPreview(
+                        build: (PdfPageFormat format) async => snapshot.data!,
+                        useActions: false,
+                        canChangeOrientation: false,
+                        canChangePageFormat: false,
+                        canDebug: false,
+                      );
+                    },
+                  )
+                : InteractiveViewer(
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Text(
+                            'No se pudo cargar la vista previa del documento',
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
           ),
         ],
       ),
@@ -175,6 +233,11 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final rangoDias =
+        'Del ${_dateFormat.format(_item.fechaInicio)} al ${_dateFormat.format(_item.fechaFin)}';
+    final esExpedienteUnificado =
+        _item.ineAnversoUrl == _item.cartaMotivoUrl || _item.esMotivoSalud;
+
     return Scaffold(
       appBar: AppBar(title: Text('Revision: ${_item.matricula}')),
       body: _procesando
@@ -184,7 +247,6 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Resumen de datos que se inyectaran en el oficio
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -203,9 +265,22 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
                           Text(
                             'Licenciatura en Ingenieria: ${_item.licenciatura}',
                           ),
-                          Text('Docentes del Grupo: ${_item.docentesGrupo}'),
+                          Text('Docentes / Grupo: ${_item.docentesGrupo}'),
+                          const Divider(height: 16),
+                          Text(
+                            'Dias a justificar: $rangoDias',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tipo de comprobante: ${_item.esMotivoSalud ? "Receta Medica (Salud)" : "Hoja escaneada con INE (ambos lados) y Carta de Tutor"}',
+                          ),
+                          const SizedBox(height: 4),
                           Text('Motivo declarado: ${_item.motivo}'),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Chip(label: Text('Estado: ${_item.estado.name}')),
                         ],
                       ),
@@ -213,23 +288,31 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Inspeccion de Documentos (Pellizca para hacer zoom):',
+                    'Inspeccion de Expediente:',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-
-                  _construirTarjetaDocumento(
-                    '1. INE del Tutor (Anverso)',
-                    _item.ineAnversoUrl,
-                  ),
-                  _construirTarjetaDocumento(
-                    '2. INE del Tutor (Reverso - Verificar firma)',
-                    _item.ineReversoUrl,
-                  ),
-                  _construirTarjetaDocumento(
-                    '3. Carta de Motivo Firmada por el Tutor',
-                    _item.cartaMotivoUrl,
-                  ),
+                  if (esExpedienteUnificado)
+                    _construirVisorExpedienteUnico(
+                      _item.esMotivoSalud
+                          ? 'Expediente Medico (Receta / Constancia)'
+                          : 'Hoja Escaneada Unica (INE Ambos Lados + Carta Tutor)',
+                      _item.cartaMotivoUrl,
+                    )
+                  else ...[
+                    _construirVisorExpedienteUnico(
+                      '1. INE del Tutor (Anverso)',
+                      _item.ineAnversoUrl,
+                    ),
+                    _construirVisorExpedienteUnico(
+                      '2. INE del Tutor (Reverso)',
+                      _item.ineReversoUrl,
+                    ),
+                    _construirVisorExpedienteUnico(
+                      '3. Carta de Motivo Firmada',
+                      _item.cartaMotivoUrl,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -286,13 +369,23 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
 
 class FullScreenDocumentViewer extends StatelessWidget {
   final String title;
-  final String imageUrl;
+  final String documentUrl;
+  final bool esPdf;
 
   const FullScreenDocumentViewer({
     super.key,
     required this.title,
-    required this.imageUrl,
+    required this.documentUrl,
+    required this.esPdf,
   });
+
+  Future<Uint8List> _descargarBytes() async {
+    final respuesta = await http.get(Uri.parse(documentUrl));
+    if (respuesta.statusCode == 200) {
+      return respuesta.bodyBytes;
+    }
+    throw Exception('No se pudo descargar el archivo');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,14 +396,21 @@ class FullScreenDocumentViewer extends StatelessWidget {
         foregroundColor: Colors.white,
         title: Text(title),
       ),
-      body: Center(
-        child: InteractiveViewer(
-          panEnabled: true,
-          minScale: 0.8,
-          maxScale: 6.0,
-          child: Image.network(imageUrl),
-        ),
-      ),
+      body: esPdf
+          ? PdfPreview(
+              build: (PdfPageFormat format) async => await _descargarBytes(),
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+            )
+          : Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.8,
+                maxScale: 6.0,
+                child: Image.network(documentUrl),
+              ),
+            ),
     );
   }
 }

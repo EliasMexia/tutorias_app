@@ -1,16 +1,1 @@
-{
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "disallowLegacyRuntimeConfig": true,
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local"
-      ]
-    }
-  ]
-}
+{"flutter":{"platforms":{"android":{"default":{"projectId":"tutoriasapp-a9c03","appId":"1:447196028249:android:c924d9823794376272c048","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tutoriasapp-a9c03","configurations":{"android":"1:447196028249:android:c924d9823794376272c048","ios":"1:447196028249:ios:b710fcd19cfb824e72c048","macos":"1:447196028249:ios:b710fcd19cfb824e72c048","web":"1:447196028249:web:c906f78a11155db172c048","windows":"1:447196028249:web:e938b3679bd6884972c048"}}}}}}

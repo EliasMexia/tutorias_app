@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "447196028249",
+    "project_id": "tutoriasapp-a9c03",
+    "storage_bucket": "tutoriasapp-a9c03.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447196028249:android:c924d9823794376272c048",
+        "android_client_info": {
+          "package_name": "com.example.tutorias_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "447196028249-46lrbrtslitang194j39r3m840nqki2t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLZxI7LgWjxVHoU-kSjB64-vweDS7I4uw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "447196028249-46lrbrtslitang194j39r3m840nqki2t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
